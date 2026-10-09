@@ -1,0 +1,15 @@
+<Window x:Class="PhoneCam.Desktop.PreviewWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="PhoneCam · podgląd" Width="976" Height="589" MinWidth="320" MinHeight="200"
+        Background="Black" Foreground="#F2F4F7">
+  <Grid>
+    <Image x:Name="VideoImage" Stretch="Uniform" RenderOptions.BitmapScalingMode="Linear" />
+    <TextBlock x:Name="Overlay" Text="Łączenie z obrazem…" FontSize="16" Foreground="#AAB2BF"
+               HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False">
+      <TextBlock.Effect>
+        <DropShadowEffect BlurRadius="8" ShadowDepth="0" Opacity="0.9" />
+      </TextBlock.Effect>
+    </TextBlock>
+  </Grid>
+</Window>

@@ -1,0 +1,8 @@
+**/bin/
+**/obj/
+.vs/
+*.user
+*.suo
+runtime/
+**/test-runtime/
+**/test-output/

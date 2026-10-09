@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/src/" />
+  <Folder Name="/tools/">
+    <Project Path="tools/PhoneCam.HostingChecks/PhoneCam.HostingChecks.csproj" />
+  </Folder>
+  <Project Path="src/PhoneCam.Desktop/PhoneCam.Desktop.csproj" />
+  <Project Path="src/PhoneCam.Streaming/PhoneCam.Streaming.csproj" />
+  <Project Path="tools/PhoneCam.ProtocolChecks/PhoneCam.ProtocolChecks.csproj" />
+  <Project Path="tools/PhoneCam.StreamSimulator/PhoneCam.StreamSimulator.csproj" />
+  <Project Path="tools/PhoneCam.VideoChecks/PhoneCam.VideoChecks.csproj" />
+  <Project Path="tools/PhoneCam.WebTest/PhoneCam.CertShare.csproj" />
+</Solution>

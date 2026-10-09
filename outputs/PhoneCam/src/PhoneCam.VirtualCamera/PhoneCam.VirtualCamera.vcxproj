@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Built by PhoneCam.Desktop.csproj (target BuildVirtualCamera) through Visual Studio's MSBuild;
+     `dotnet build` alone cannot build C++ projects. x64 only: OBS, Teams, Zoom and browsers are 64-bit. -->
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>17.0</VCProjectVersion>
+    <ProjectGuid>{6B0E3C2A-8F41-4E3B-9C55-2A7D9E1F4B60}</ProjectGuid>
+    <RootNamespace>PhoneCamVirtualCamera</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <PlatformToolset>$(DefaultPlatformToolset)</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+    <UseDebugLibraries Condition="'$(Configuration)'=='Debug'">true</UseDebugLibraries>
+    <UseDebugLibraries Condition="'$(Configuration)'=='Release'">false</UseDebugLibraries>
+    <WholeProgramOptimization Condition="'$(Configuration)'=='Release'">true</WholeProgramOptimization>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <PropertyGroup>
+    <IntDir>obj\$(Configuration)\</IntDir>
+    <OutDir Condition="'$(OutDir)'=='' Or '$(OutDir)'=='$(SolutionDir)$(Platform)\$(Configuration)\'">bin\$(Configuration)\</OutDir>
+  </PropertyGroup>
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <SDLCheck>true</SDLCheck>
+      <!-- The 2001-era DirectShow base classes do not compile under /permissive- (uuids.h string literals). -->
+      <ConformanceMode>false</ConformanceMode>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <AdditionalIncludeDirectories>$(ProjectDir);$(ProjectDir)baseclasses;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>WIN32;_CRT_SECURE_NO_WARNINGS;_WINDOWS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <!-- Static CRT: the DLL is loaded into foreign processes (OBS, Teams), so it must not depend on a VC++ redistributable. -->
+      <RuntimeLibrary Condition="'$(Configuration)'=='Debug'">MultiThreadedDebug</RuntimeLibrary>
+      <RuntimeLibrary Condition="'$(Configuration)'=='Release'">MultiThreaded</RuntimeLibrary>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <ModuleDefinitionFile>PhoneCam.VirtualCamera.def</ModuleDefinitionFile>
+      <AdditionalDependencies>strmiids.lib;winmm.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)'=='Debug'">
+    <ClCompile>
+      <PreprocessorDefinitions>_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)'=='Release'">
+    <ClCompile>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <Link>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="PhoneCam.VirtualCamera.cpp" />
+    <ClCompile Include="softcam\DShowSoftcam.cpp" />
+    <ClCompile Include="softcam\FrameBuffer.cpp" />
+    <ClCompile Include="softcam\Misc.cpp" />
+    <ClCompile Include="softcam\SenderAPI.cpp" />
+    <ClCompile Include="softcam\Watchdog.cpp" />
+    <ClCompile Include="baseclasses\amfilter.cpp" />
+    <ClCompile Include="baseclasses\amvideo.cpp" />
+    <ClCompile Include="baseclasses\combase.cpp" />
+    <ClCompile Include="baseclasses\dllentry.cpp" />
+    <ClCompile Include="baseclasses\dllsetup.cpp" />
+    <ClCompile Include="baseclasses\mtype.cpp" />
+    <ClCompile Include="baseclasses\source.cpp" />
+    <ClCompile Include="baseclasses\winutil.cpp" />
+    <ClCompile Include="baseclasses\wxdebug.cpp">
+      <!-- The file defines _WINDLL itself; the DLL project already does. -->
+      <DisableSpecificWarnings>4005;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+    </ClCompile>
+    <ClCompile Include="baseclasses\wxlist.cpp" />
+    <ClCompile Include="baseclasses\wxutil.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="Cameras.h" />
+    <ClInclude Include="softcam\DShowSoftcam.h" />
+    <ClInclude Include="softcam\FrameBuffer.h" />
+    <ClInclude Include="softcam\Misc.h" />
+    <ClInclude Include="softcam\SenderAPI.h" />
+    <ClInclude Include="softcam\Watchdog.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="PhoneCam.VirtualCamera.def" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+</Project>

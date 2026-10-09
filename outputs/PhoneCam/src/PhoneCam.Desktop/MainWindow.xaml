@@ -1,0 +1,226 @@
+<Window x:Class="PhoneCam.Desktop.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="PhoneCam" Height="800" Width="1000" MinHeight="720" MinWidth="880"
+        WindowStartupLocation="CenterScreen" Background="#171A20" Foreground="#F2F4F7">
+  <Window.Resources>
+    <SolidColorBrush x:Key="Muted" Color="#AAB2BF" />
+    <SolidColorBrush x:Key="Accent" Color="#2E79DC" />
+    <Style x:Key="Card" TargetType="Border">
+      <Setter Property="Background" Value="#20242B" />
+      <Setter Property="BorderBrush" Value="#2C323C" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="10" />
+      <Setter Property="Padding" Value="18" />
+    </Style>
+    <Style x:Key="PlatformButton" TargetType="Button">
+      <Setter Property="Foreground" Value="#F2F4F7" />
+      <Setter Property="Cursor" Value="Hand" />
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Border x:Name="Bd" Background="#20242B" BorderBrush="#303744" BorderThickness="1" CornerRadius="14" Padding="28">
+              <ContentPresenter />
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="Bd" Property="BorderBrush" Value="#2E79DC" />
+                <Setter TargetName="Bd" Property="Background" Value="#242A33" />
+              </Trigger>
+              <Trigger Property="IsKeyboardFocused" Value="True">
+                <Setter TargetName="Bd" Property="BorderBrush" Value="#2E79DC" />
+              </Trigger>
+              <Trigger Property="IsEnabled" Value="False">
+                <Setter TargetName="Bd" Property="Opacity" Value="0.45" />
+                <Setter Property="Cursor" Value="Arrow" />
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+    <Style x:Key="FlatButton" TargetType="Button">
+      <Setter Property="Foreground" Value="#F2F4F7" />
+      <Setter Property="Background" Value="#2A303A" />
+      <Setter Property="Cursor" Value="Hand" />
+      <Setter Property="Padding" Value="14,7" />
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Border x:Name="Bd" Background="{TemplateBinding Background}" CornerRadius="8" Padding="{TemplateBinding Padding}">
+              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="Bd" Property="Opacity" Value="0.85" />
+              </Trigger>
+              <Trigger Property="IsEnabled" Value="False">
+                <Setter TargetName="Bd" Property="Opacity" Value="0.45" />
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+    <Style x:Key="UrlBox" TargetType="TextBox">
+      <Setter Property="IsReadOnly" Value="True" />
+      <Setter Property="Background" Value="#171A20" />
+      <Setter Property="Foreground" Value="#C5CCD6" />
+      <Setter Property="BorderBrush" Value="#303744" />
+      <Setter Property="FontFamily" Value="Consolas" />
+      <Setter Property="Padding" Value="6,4" />
+      <Setter Property="Margin" Value="0,12,0,0" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+    </Style>
+  </Window.Resources>
+
+  <Grid Margin="28,22,28,18">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="*" />
+      <RowDefinition Height="Auto" />
+    </Grid.RowDefinitions>
+
+    <!-- Header -->
+    <DockPanel>
+      <Border DockPanel.Dock="Right" Background="#20242B" CornerRadius="14" Padding="12,6" VerticalAlignment="Center">
+        <StackPanel Orientation="Horizontal">
+          <TextBlock x:Name="ServerDot" Text="●" Foreground="#D2A957" Margin="0,0,8,0" />
+          <TextBlock x:Name="ServerStatus" Text="Uruchamianie serwera…" />
+        </StackPanel>
+      </Border>
+      <StackPanel>
+        <TextBlock Text="PhoneCam" FontSize="30" FontWeight="SemiBold" />
+        <TextBlock Text="Telefon jako kamera internetowa przez Wi-Fi lub kabel USB" Foreground="{StaticResource Muted}" Margin="0,2,0,0" />
+      </StackPanel>
+    </DockPanel>
+
+    <!-- Network -->
+    <Border Grid.Row="1" Style="{StaticResource Card}" Margin="0,18,0,16" Padding="16,12">
+      <StackPanel>
+        <DockPanel>
+          <TextBlock Text="Adres w sieci lokalnej" Foreground="{StaticResource Muted}" VerticalAlignment="Center" Margin="0,0,14,0" />
+          <Button x:Name="RefreshAddressesButton" DockPanel.Dock="Right" Style="{StaticResource FlatButton}" Content="Odśwież" Margin="10,0,0,0" Click="RefreshAddresses_Click" />
+          <ComboBox x:Name="AddressPicker" DisplayMemberPath="Label" MinWidth="320" Padding="8,5" SelectionChanged="AddressPicker_SelectionChanged" />
+        </DockPanel>
+        <DockPanel x:Name="FirewallPanel" Margin="0,10,0,0" Visibility="Collapsed">
+          <Button DockPanel.Dock="Right" Style="{StaticResource FlatButton}" Background="{StaticResource Accent}" Content="Skonfiguruj" Margin="10,0,0,0" Click="ConfigureSystem_Click" />
+          <TextBlock x:Name="SetupWarning" Foreground="#E8BB5A" TextWrapping="Wrap" VerticalAlignment="Center" />
+        </DockPanel>
+        <TextBlock x:Name="NetworkWarning" Foreground="#E8BB5A" TextWrapping="Wrap" Margin="0,10,0,0" Visibility="Collapsed" />
+        <DockPanel Margin="0,10,0,0">
+          <Button x:Name="UsbActionButton" DockPanel.Dock="Right" Style="{StaticResource FlatButton}" Background="{StaticResource Accent}" Margin="10,0,0,0" VerticalAlignment="Center"
+                  Visibility="Collapsed" Click="UsbAction_Click" />
+          <TextBlock x:Name="UsbDot" Text="●" Foreground="#89919D" Margin="0,0,8,0" />
+          <TextBlock TextWrapping="Wrap" VerticalAlignment="Center">
+            <Run x:Name="UsbTitle" Text="Kabel USB" FontWeight="SemiBold" /><Run Text="   " /><Run x:Name="UsbDetail" Foreground="{StaticResource Muted}" />
+          </TextBlock>
+        </DockPanel>
+      </StackPanel>
+    </Border>
+
+    <!-- Home: choose platform -->
+    <Grid x:Name="HomeView" Grid.Row="2">
+      <Grid.RowDefinitions>
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="*" />
+      </Grid.RowDefinitions>
+      <TextBlock Text="Wybierz telefon, który chcesz połączyć" FontSize="18" Margin="0,4,0,14" />
+      <Grid Grid.Row="1" VerticalAlignment="Top">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="*" />
+          <ColumnDefinition Width="18" />
+          <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+        <Button x:Name="ConnectIosButton" Style="{StaticResource PlatformButton}" Click="ConnectIos_Click" MinHeight="190">
+          <StackPanel>
+            <TextBlock Text="iOS" FontSize="15" Foreground="{StaticResource Muted}" />
+            <TextBlock Text="Połącz iPhone" FontSize="26" FontWeight="SemiBold" Margin="0,4,0,10" />
+            <TextBlock Text="Przez Safari, bez instalowania aplikacji. Wi-Fi albo kabel USB. Do 1080p, 60 fps." Foreground="{StaticResource Muted}" TextWrapping="Wrap" />
+          </StackPanel>
+        </Button>
+        <Button Grid.Column="2" Style="{StaticResource PlatformButton}" IsEnabled="False" MinHeight="190">
+          <StackPanel>
+            <TextBlock Text="Android" FontSize="15" Foreground="{StaticResource Muted}" />
+            <TextBlock Text="Połącz Android" FontSize="26" FontWeight="SemiBold" Margin="0,4,0,10" />
+            <TextBlock Text="Wkrótce." Foreground="{StaticResource Muted}" />
+          </StackPanel>
+        </Button>
+      </Grid>
+    </Grid>
+
+    <!-- iOS connection -->
+    <Grid x:Name="IosView" Grid.Row="2" Visibility="Collapsed">
+      <Grid.RowDefinitions>
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="*" />
+        <RowDefinition Height="Auto" />
+      </Grid.RowDefinitions>
+      <DockPanel Margin="0,0,0,14">
+        <Button Style="{StaticResource FlatButton}" Content="← Wybór telefonu" Click="BackToHome_Click" Margin="0,0,16,0" />
+        <TextBlock Text="Połącz iPhone" FontSize="22" FontWeight="SemiBold" VerticalAlignment="Center" />
+      </DockPanel>
+
+      <Grid Grid.Row="1">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="*" />
+          <ColumnDefinition Width="16" />
+          <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <Border Style="{StaticResource Card}">
+          <DockPanel>
+            <StackPanel DockPanel.Dock="Top">
+              <TextBlock Text="1 · Certyfikat (jednorazowo)" FontSize="17" FontWeight="SemiBold" />
+              <TextBlock Text="Pozwala Safari ufać temu komputerowi." Foreground="{StaticResource Muted}" Margin="0,2,0,12" />
+            </StackPanel>
+            <TextBlock DockPanel.Dock="Bottom" Foreground="{StaticResource Muted}" FontSize="12.5" TextWrapping="Wrap" LineHeight="19" Margin="0,12,0,0">
+              <Run Text="a) Zeskanuj kod aparatem i otwórz link w Safari. Wybierz „Zezwól”." /><LineBreak />
+              <Run Text="b) Ustawienia → Pobrany profil → Instaluj." /><LineBreak />
+              <Run Text="c) Ustawienia → Ogólne → To urządzenie → Ustawienia zaufania certyfikatów → włącz „PhoneCam Local CA”." />
+            </TextBlock>
+            <TextBox x:Name="CertificateUrl" DockPanel.Dock="Bottom" Style="{StaticResource UrlBox}" />
+            <Border Background="White" CornerRadius="8" Padding="6" HorizontalAlignment="Center" VerticalAlignment="Center">
+              <Image x:Name="CertificateQr" Width="190" Height="190" RenderOptions.BitmapScalingMode="NearestNeighbor" />
+            </Border>
+          </DockPanel>
+        </Border>
+
+        <Border Grid.Column="2" Style="{StaticResource Card}">
+          <DockPanel>
+            <StackPanel DockPanel.Dock="Top">
+              <TextBlock Text="2 · Strona kamery" FontSize="17" FontWeight="SemiBold" />
+              <TextBlock Text="Otwórz za każdym razem, gdy chcesz nadawać." Foreground="{StaticResource Muted}" Margin="0,2,0,12" />
+            </StackPanel>
+            <TextBlock DockPanel.Dock="Bottom" Foreground="{StaticResource Muted}" FontSize="12.5" TextWrapping="Wrap" LineHeight="19" Margin="0,12,0,0">
+              <Run Text="a) Zeskanuj kod i otwórz link w Safari." /><LineBreak />
+              <Run Text="b) Wybierz „Uruchom kamerę i połącz”. Zezwól na dostęp do ruchu i orientacji (obraz obróci się sam) oraz do kamery." /><LineBreak />
+              <Run Text="c) Połóż telefon poziomo. Gdy obraz dotrze, podgląd otworzy się w osobnym oknie." />
+            </TextBlock>
+            <TextBox x:Name="PublishUrl" DockPanel.Dock="Bottom" Style="{StaticResource UrlBox}" />
+            <Border Background="White" CornerRadius="8" Padding="6" HorizontalAlignment="Center" VerticalAlignment="Center">
+              <Image x:Name="PublishQr" Width="190" Height="190" RenderOptions.BitmapScalingMode="NearestNeighbor" />
+            </Border>
+          </DockPanel>
+        </Border>
+      </Grid>
+    </Grid>
+
+    <!-- Connection status (always visible once a slot was chosen) -->
+    <Border x:Name="ConnectionCard" Grid.Row="3" Style="{StaticResource Card}" Margin="0,16,0,0" Padding="16,12" Visibility="Collapsed">
+      <DockPanel>
+        <Button x:Name="ShowPreviewButton" DockPanel.Dock="Right" Style="{StaticResource FlatButton}" Background="{StaticResource Accent}"
+                Content="Pokaż podgląd" VerticalAlignment="Center" Visibility="Collapsed" Click="ShowPreview_Click" />
+        <StackPanel>
+          <StackPanel Orientation="Horizontal">
+            <TextBlock x:Name="ConnectionDot" Text="●" Foreground="#89919D" Margin="0,0,8,0" FontSize="15" />
+            <TextBlock x:Name="ConnectionStatus" Text="iPhone · oczekiwanie na połączenie" FontSize="15" FontWeight="SemiBold" />
+          </StackPanel>
+          <TextBlock x:Name="ConnectionDetails" Foreground="{StaticResource Muted}" FontFamily="Consolas" Margin="0,4,0,0" TextWrapping="Wrap" />
+          <TextBlock x:Name="CameraStatus" Foreground="{StaticResource Muted}" Margin="0,4,0,0" TextWrapping="Wrap" />
+        </StackPanel>
+      </DockPanel>
+    </Border>
+  </Grid>
+</Window>

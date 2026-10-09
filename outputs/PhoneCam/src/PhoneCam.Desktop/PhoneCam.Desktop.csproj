@@ -1,0 +1,65 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="QRCoder" Version="1.8.0" />
+    <ProjectReference Include="..\PhoneCam.Streaming\PhoneCam.Streaming.csproj" />
+    <PackageReference Include="FFmpegDotNet.bin.winx64" Version="8.1.2.6" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="Web\phonecam.html" CopyToOutputDirectory="PreserveNewest" />
+    <InternalsVisibleTo Include="PhoneCam.HostingChecks" />
+  </ItemGroup>
+
+  <!-- MediaMTX is downloaded once at build time (pinned version + SHA-256) and copied next to the exe,
+       so the running app never needs internet access. -->
+  <PropertyGroup>
+    <MediaMtxVersion>1.21.1</MediaMtxVersion>
+    <MediaMtxSha256>faa97974861eb75a68b5aa326c78e7e7a6f670b5ef191bace78e715130381f23</MediaMtxSha256>
+    <MediaMtxZip>mediamtx_v$(MediaMtxVersion)_windows_amd64.zip</MediaMtxZip>
+    <MediaMtxCacheDir>$(MSBuildProjectDirectory)\obj\mediamtx\$(MediaMtxVersion)\</MediaMtxCacheDir>
+  </PropertyGroup>
+  <Target Name="FetchMediaMtx" BeforeTargets="Build" Condition="!Exists('$(MediaMtxCacheDir)mediamtx.exe')">
+    <DownloadFile SourceUrl="https://github.com/bluenviron/mediamtx/releases/download/v$(MediaMtxVersion)/$(MediaMtxZip)" DestinationFolder="$(MediaMtxCacheDir)" />
+    <GetFileHash Files="$(MediaMtxCacheDir)$(MediaMtxZip)" Algorithm="SHA256">
+      <Output TaskParameter="Hash" PropertyName="MediaMtxActualSha256" />
+    </GetFileHash>
+    <Delete Files="$(MediaMtxCacheDir)$(MediaMtxZip)" Condition="'$(MediaMtxActualSha256.ToLowerInvariant())' != '$(MediaMtxSha256)'" />
+    <Error Condition="'$(MediaMtxActualSha256.ToLowerInvariant())' != '$(MediaMtxSha256)'" Text="Suma SHA-256 archiwum MediaMTX jest niezgodna (otrzymano $(MediaMtxActualSha256))." />
+    <Unzip SourceFiles="$(MediaMtxCacheDir)$(MediaMtxZip)" DestinationFolder="$(MediaMtxCacheDir)" />
+    <Delete Files="$(MediaMtxCacheDir)$(MediaMtxZip)" />
+  </Target>
+  <Target Name="CopyMediaMtx" AfterTargets="Build">
+    <Copy SourceFiles="$(MediaMtxCacheDir)mediamtx.exe;$(MediaMtxCacheDir)LICENSE" DestinationFolder="$(OutDir)mediamtx" SkipUnchangedFiles="true" />
+  </Target>
+
+  <!-- The virtual camera is a native DirectShow filter (C++). `dotnet build` cannot compile C++, so this
+       target runs Visual Studio's MSBuild (found with vswhere; needs the C++ desktop workload) whenever the
+       native sources change, and the DLL is copied next to the exe like any content file. -->
+  <PropertyGroup>
+    <VirtualCameraDir>$(MSBuildProjectDirectory)\..\PhoneCam.VirtualCamera\</VirtualCameraDir>
+    <VirtualCameraDll>$(VirtualCameraDir)bin\$(Configuration)\PhoneCam.VirtualCamera.dll</VirtualCameraDll>
+  </PropertyGroup>
+  <ItemGroup>
+    <VirtualCameraSource Include="$(VirtualCameraDir)**\*.cpp;$(VirtualCameraDir)**\*.h;$(VirtualCameraDir)*.def;$(VirtualCameraDir)*.vcxproj"
+                         Exclude="$(VirtualCameraDir)bin\**;$(VirtualCameraDir)obj\**" />
+    <None Include="$(VirtualCameraDll)" Link="PhoneCam.VirtualCamera.dll" CopyToOutputDirectory="PreserveNewest" Visible="false" />
+  </ItemGroup>
+  <Target Name="BuildVirtualCamera" BeforeTargets="BeforeBuild" Inputs="@(VirtualCameraSource)" Outputs="$(VirtualCameraDll)">
+    <Exec Command="&quot;$(MSBuildProgramFiles32)\Microsoft Visual Studio\Installer\vswhere.exe&quot; -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -find MSBuild\**\Bin\amd64\MSBuild.exe"
+          ConsoleToMSBuild="true" StandardOutputImportance="low" ContinueOnError="true">
+      <Output TaskParameter="ConsoleOutput" PropertyName="VsMSBuild" />
+    </Exec>
+    <Error Condition="'$(VsMSBuild)' == '' Or !Exists('$(VsMSBuild)')"
+           Text="Kamera wirtualna (src\PhoneCam.VirtualCamera) wymaga Visual Studio z obciążeniem „Programowanie aplikacji klasycznych w języku C++”." />
+    <!-- The .NET SDK's MSBuild variables must not leak into Visual Studio's MSBuild. -->
+    <Exec Command="&quot;$(VsMSBuild)&quot; &quot;$(VirtualCameraDir)PhoneCam.VirtualCamera.vcxproj&quot; -p:Configuration=$(Configuration) -p:Platform=x64 -nologo -v:minimal -m"
+          EnvironmentVariables="MSBuildExtensionsPath=;MSBuildSDKsPath=;MSBUILD_EXE_PATH=;MSBuildLoadMicrosoftTargetsReadOnly=" />
+  </Target>
+</Project>

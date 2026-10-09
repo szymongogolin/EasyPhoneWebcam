@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#101318">
+  <title>PhoneCam · test kamery</title>
+  <style>
+    :root { color-scheme: dark; font: 16px system-ui, sans-serif; background: #101318; color: #f2f4f7; }
+    * { box-sizing: border-box; }
+    body { margin: 0 auto; padding: 20px 16px max(22px, env(safe-area-inset-bottom)); width: min(100%, 680px); }
+    h1 { margin: 0 0 4px; font-size: 26px; }
+    p { color: #aab2bf; margin: 4px 0 18px; }
+    .card { background: #1b2028; border: 1px solid #303744; border-radius: 14px; padding: 16px; margin: 12px 0; }
+    label { display: block; color: #c5ccd6; font-size: 14px; margin: 12px 0 6px; }
+    select, button { font: inherit; min-height: 46px; border-radius: 9px; width: 100%; border: 1px solid #485362; background: #11161d; color: #f2f4f7; padding: 9px 12px; }
+    button { border: 0; background: #2e79dc; font-weight: 650; margin-top: 14px; }
+    button.stop { background: #a53b42; }
+    button:disabled { opacity: .55; }
+    video { width: 100%; max-height: 58vh; aspect-ratio: 16 / 9; object-fit: contain; background: #07090c; border-radius: 10px; }
+    #previewWrap { display: none; }
+    #status { font-weight: 650; color: #e8bb5a; min-height: 24px; }
+    #stats { white-space: pre-line; color: #b7c1cf; font: 13px ui-monospace, Consolas, monospace; line-height: 1.7; }
+    #diagnostics { color: #b7c1cf; white-space: pre-wrap; overflow-wrap: anywhere; font: 12px ui-monospace, Consolas, monospace; line-height: 1.5; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .hint { font-size: 13px; line-height: 1.5; }
+  </style>
+</head>
+<body>
+  <h1>PhoneCam</h1>
+  <p id="subtitle">Test lokalny kamery przez Wi-Fi</p>
+  <section class="card" id="setup">
+    <label for="slot">Telefon / kanał</label>
+    <select id="slot"><option value="iphone">iPhone 15 Pro</option><option value="android">Xiaomi Mi 9T</option></select>
+    <label for="camera">Kamera</label>
+    <select id="camera"><option value="environment">Tylna</option><option value="user">Przednia</option></select>
+    <div class="row">
+      <div><label for="resolution">Rozdzielczość</label><select id="resolution"><option value="720">1280 × 720</option><option value="1080">1920 × 1080</option></select></div>
+      <div><label for="fps">Klatki na sekundę</label><select id="fps"><option value="60">60 fps</option><option value="30">30 fps</option></select></div>
+    </div>
+    <label for="bitrate">Docelowy bitrate</label>
+    <select id="bitrate"><option value="8000">8 Mb/s</option><option value="10000" selected>10 Mb/s</option><option value="12000">12 Mb/s</option><option value="16000">16 Mb/s</option></select>
+    <button id="start">Uruchom kamerę i połącz</button>
+    <div id="setupStatus" role="status" aria-live="polite"></div>
+    <details><summary>Diagnostyka połączenia</summary><pre id="diagnostics">Gotowe. Uruchom kamerę, aby zapisać przebieg połączenia.</pre></details>
+    <p class="hint">Przesyłany jest obraz H.264. Mikrofon nie jest używany. 60 fps i wybrana rozdzielczość są celami; rzeczywiste parametry zależą od możliwości kamery, światła, temperatury telefonu i Wi-Fi.</p>
+  </section>
+  <section class="card" id="previewWrap">
+    <video id="preview" autoplay muted playsinline></video>
+    <div id="status">Łączenie…</div>
+    <div id="stats"></div>
+    <button id="stop" class="stop">Zatrzymaj przesyłanie</button>
+  </section>
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const pathSlot = location.pathname.split('/').filter(Boolean)[0];
+  const slot = $("slot");
+  if (pathSlot === "iphone" || pathSlot === "android") slot.value = pathSlot;
+  const defaults = () => {
+    const iphone = slot.value === "iphone";
+    $("resolution").value = "720";
+    $("fps").value = iphone ? "60" : "30";
+    $("bitrate").value = iphone ? "10000" : "6000";
+    $("subtitle").textContent = iphone ? "Kanał iPhone · priorytet 720p60" : "Kanał Android · profil początkowy 720p30";
+  };
+  slot.addEventListener("change", defaults);
+  defaults();
+
+  let stream = null;
+  let pc = null;
+  let sessionUrl = null;
+  let statsTimer = null;
+  let queuedCandidates = [];
+  let offerData = null;
+  let currentStage = "Gotowe";
+  const diagnosticLines = [];
+  function logDiagnostic(message) {
+    const time = new Date().toLocaleTimeString();
+    diagnosticLines.push(`${time}  ${message}`);
+    while (diagnosticLines.length > 30) diagnosticLines.shift();
+    $("diagnostics").textContent = diagnosticLines.join("\n");
+  }
+  async function diagnosticFetch(url, options, label) {
+    currentStage = label;
+    logDiagnostic(`${label}: ${options.method || "GET"} ${url}`);
+    try {
+      const response = await fetch(url, options);
+      logDiagnostic(`${label}: HTTP ${response.status}`);
+      return response;
+    } catch (error) {
+      const detail = error?.message || String(error);
+      logDiagnostic(`${label}: FETCH ERROR ${detail}`);
+      throw new Error(`${label} (${url}): ${detail}. Sprawdź HTTPS/certyfikat i dostępność portu.`);
+    }
+  }
+  const endpoint = () => `https://${location.hostname}:8889/${slot.value}/whip`;
+  const status = (message, color = "#e8bb5a") => {
+    for (const id of ["status", "setupStatus"]) { $(id).textContent = message; $(id).style.color = color; }
+  };
+
+  // Orientation. Safari rotates camera frames to the *interface* orientation, which stays portrait under
+  // the iOS rotation lock, so a phone lying sideways sends a portrait frame with sideways content.
+  // We read the physical orientation from the sensor and tell the PC how far to rotate (degrees CCW).
+  let physicalAngle = null;   // 0/90/180/270: device turned counter-clockwise from upright portrait
+  let sensorState = "brak danych";
+  let sentRotation = null;
+  let orientationTimer = null;
+  let orientationTicks = 0;
+  window.addEventListener("deviceorientation", (event) => {
+    if (event.beta == null || event.gamma == null) return;
+    sensorState = "aktywny";
+    const beta = event.beta * Math.PI / 180, gamma = event.gamma * Math.PI / 180;
+    // World "up" in screen coordinates (x right, y towards the top edge) from the W3C Z-X'-Y'' angles.
+    const upX = -Math.cos(beta) * Math.sin(gamma), upY = Math.sin(beta);
+    if (Math.hypot(upX, upY) < 0.5) return;  // lying flat: keep the last orientation
+    const angle = (Math.atan2(upX, upY) * 180 / Math.PI + 360) % 360;
+    const nearest = (Math.round(angle / 90) % 4) * 90;
+    const offset = Math.abs(((angle - nearest + 540) % 360) - 180);
+    if (physicalAngle === null || offset < 30) physicalAngle = nearest;  // hysteresis around 45°
+  });
+  const interfaceAngle = () => {
+    const angle = screen.orientation?.angle ?? window.orientation ?? 0;
+    return ((angle % 360) + 360) % 360;
+  };
+  function currentRotation() {
+    if (physicalAngle === null) return 0;
+    const difference = (physicalAngle - interfaceAngle() + 360) % 360;
+    const facing = stream?.getVideoTracks()[0]?.getSettings().facingMode || $("camera").value;
+    return facing === "user" ? (360 - difference) % 360 : difference;  // the unmirrored selfie image turns the other way
+  }
+  async function reportOrientation(force) {
+    const rotation = currentRotation();
+    if (!force && rotation === sentRotation) return;
+    try {
+      const response = await fetch(`/api/orientation/${slot.value}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ rotation }) });
+      if (response.ok) sentRotation = rotation;
+    } catch { /* PC unreachable; retried on the next tick */ }
+  }
+  const describeOrientation = () => physicalAngle === null
+    ? `Orientacja: czujnik ${sensorState}, obraz bez obrotu`
+    : `Orientacja: ${physicalAngle % 180 === 0 ? "pionowo" : "poziomo"} · obrót na PC ${currentRotation()}°`;
+
+  async function waitForIceServers(url) {
+    const response = await diagnosticFetch(url, { method: "OPTIONS" }, "Sprawdzanie serwera WHIP");
+    if (!response.ok) throw new Error(`Sygnalizacja WHIP: HTTP ${response.status}`);
+    const header = response.headers.get("Link") || "";
+    const iceServers = [...header.matchAll(/<([^>]+)>; rel="ice-server"(?:; username="([^"]*)"; credential="([^"]*)"; credential-type="password")?/gi)]
+      .map((match) => ({ urls: [match[1]], ...(match[2] ? { username: JSON.parse(`"${match[2]}"`), credential: JSON.parse(`"${match[3]}"`) } : {}) }));
+    return iceServers;
+  }
+
+  function iceInfo(sdp) {
+    const sections = sdp.split("m=").slice(1);
+    return {
+      ufrag: (sdp.match(/^a=ice-ufrag:(.+)$/m) || [])[1],
+      pwd: (sdp.match(/^a=ice-pwd:(.+)$/m) || [])[1],
+      media: sections.map((section, i) => ({ line: section.split("\r\n", 1)[0], mid: (section.match(/^a=mid:(.+)$/m) || [])[1] || String(i) })),
+    };
+  }
+
+  async function trickle(candidates) {
+    if (!sessionUrl || candidates.length === 0) return;
+    const groups = new Map();
+    for (const candidate of candidates) {
+      const mid = candidate.sdpMLineIndex;
+      if (!groups.has(mid)) groups.set(mid, []);
+      groups.get(mid).push(candidate);
+    }
+    let body = `a=ice-ufrag:${offerData.ufrag}\r\na=ice-pwd:${offerData.pwd}\r\n`;
+    for (const [index, candidatesForMid] of groups) {
+      const media = offerData.media[index];
+      body += `m=${media.line}\r\na=mid:${media.mid}\r\n`;
+      for (const candidate of candidatesForMid) body += `a=${candidate.candidate}\r\n`;
+    }
+    const response = await diagnosticFetch(sessionUrl, { method: "PATCH", headers: { "Content-Type": "application/trickle-ice-sdpfrag", "If-Match": "*" }, body }, "Wysyłanie kandydatów ICE");
+    if (!response.ok && response.status !== 204) throw new Error(`ICE: HTTP ${response.status}`);
+  }
+
+  async function showStats() {
+    if (!pc) return;
+    const report = await pc.getStats();
+    let line = "Połączenie: " + pc.connectionState;
+    for (const row of report.values()) {
+      if (row.type === "outbound-rtp" && (row.kind === "video" || row.mediaType === "video")) {
+        const fps = row.framesPerSecond ? `${Math.round(row.framesPerSecond)} fps` : "FPS: zbieranie danych";
+        const size = row.frameWidth && row.frameHeight ? `${row.frameWidth}×${row.frameHeight}` : "wymiary: …";
+        const rate = row.bytesSent ? `${(row.bytesSent * 8 / 1000000).toFixed(1)} Mb wysłano` : "";
+        line = `Nadawanie: ${fps} · ${size} · ${rate}`;
+      }
+    }
+    $("stats").textContent = `${line}\n${describeOrientation()}`;
+  }
+
+  async function stop() {
+    clearInterval(statsTimer); statsTimer = null;
+    clearInterval(orientationTimer); orientationTimer = null; sentRotation = null;
+    if (sessionUrl) fetch(sessionUrl, { method: "DELETE" }).catch(() => {});
+    sessionUrl = null;
+    if (pc) pc.close(); pc = null;
+    if (stream) stream.getTracks().forEach((track) => track.stop()); stream = null;
+    $("preview").srcObject = null;
+    $("previewWrap").style.display = "none";
+    $("setup").style.display = "block";
+    $("start").disabled = false;
+    queuedCandidates = [];
+  }
+
+  $("start").addEventListener("click", async () => {
+    $("start").disabled = true;
+    diagnosticLines.length = 0;
+    // iOS asks for motion access only from a user gesture, so this must come first in the click handler.
+    if (typeof DeviceOrientationEvent !== "undefined" && typeof DeviceOrientationEvent.requestPermission === "function") {
+      try {
+        const permission = await DeviceOrientationEvent.requestPermission();
+        if (permission !== "granted") sensorState = "bez zgody";
+        logDiagnostic(`Czujnik orientacji: ${permission}`);
+      } catch (error) {
+        sensorState = "niedostępny";
+        logDiagnostic(`Czujnik orientacji: ${error?.message || error}`);
+      }
+    }
+    logDiagnostic(`Przeglądarka: ${navigator.userAgent}`);
+    logDiagnostic(`Secure context: ${window.isSecureContext}; getUserMedia: ${!!navigator.mediaDevices?.getUserMedia}`);
+    logDiagnostic(`Adres strony: ${location.origin}; wybrany kanał: ${slot.value}`);
+    status("Proszę czekać na kamerę…");
+    try {
+      const width = Number($("resolution").value) === 1080 ? 1920 : 1280;
+      const height = Number($("resolution").value) === 1080 ? 1080 : 720;
+      const fps = Number($("fps").value);
+      currentStage = "Uruchamianie kamery";
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: $("camera").value }, width: { ideal: width }, height: { ideal: height }, frameRate: { ideal: fps, max: fps } },
+        audio: false,
+      });
+      const cameraSettings = stream.getVideoTracks()[0].getSettings();
+      logDiagnostic(`Kamera działa: ${cameraSettings.width || "?"}×${cameraSettings.height || "?"}, ${cameraSettings.frameRate || "?"} fps`);
+      $("preview").srcObject = stream;
+      $("setup").style.display = "none";
+      $("previewWrap").style.display = "block";
+      status("Uzgadnianie połączenia…");
+      const url = endpoint();
+      const iceServers = await waitForIceServers(url);
+      pc = new RTCPeerConnection({ iceServers });
+      pc.onicecandidate = (event) => {
+        if (!event.candidate) return;
+        if (!sessionUrl) queuedCandidates.push(event.candidate);
+        else trickle([event.candidate]).catch((error) => status(error.message, "#ff8888"));
+      };
+      pc.onconnectionstatechange = () => {
+        logDiagnostic(`WebRTC connectionState: ${pc?.connectionState || "zamknięte"}`);
+        if (pc?.connectionState === "connected") status("Połączono · obraz wysyłany lokalnym Wi-Fi", "#7ee0a1");
+        else if (pc && ["failed", "disconnected"].includes(pc.connectionState)) status(`Połączenie: ${pc.connectionState}`, "#ff8888");
+      };
+      pc.oniceconnectionstatechange = () => logDiagnostic(`ICE connectionState: ${pc?.iceConnectionState || "zamknięte"}`);
+      const videoTrack = stream.getVideoTracks()[0];
+      const sender = pc.addTrack(videoTrack, stream);
+      const capabilities = RTCRtpSender.getCapabilities?.("video")?.codecs || [];
+      const h264 = capabilities.filter((codec) => codec.mimeType.toLowerCase() === "video/h264");
+      if (!h264.length) throw new Error("Ta przeglądarka nie udostępnia kodera H.264 przez WebRTC.");
+      const transceiver = pc.getTransceivers().find((item) => item.sender === sender);
+      if (transceiver?.setCodecPreferences) transceiver.setCodecPreferences(h264);
+      const parameters = sender.getParameters();
+      parameters.encodings = parameters.encodings?.length ? parameters.encodings : [{}];
+      parameters.encodings[0].maxBitrate = Number($("bitrate").value) * 1000;
+      parameters.encodings[0].maxFramerate = fps;
+      try { await sender.setParameters(parameters); }
+      catch { $("stats").textContent = "Ograniczenie bitrate nieobsługiwane przez przeglądarkę; działa limit FPS i kamery."; }
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      offerData = iceInfo(pc.localDescription.sdp);
+      const response = await diagnosticFetch(url, { method: "POST", headers: { "Content-Type": "application/sdp" }, body: pc.localDescription.sdp }, "Wysyłanie oferty SDP");
+      if (response.status !== 201) throw new Error(`Serwer WHIP: HTTP ${response.status} · ${await response.text()}`);
+      sessionUrl = new URL(response.headers.get("Location"), url).toString();
+      await pc.setRemoteDescription({ type: "answer", sdp: await response.text() });
+      await trickle(queuedCandidates); queuedCandidates = [];
+      const settings = videoTrack.getSettings();
+      $("stats").textContent = `Kamera: ${settings.width || "?"}×${settings.height || "?"} · ${settings.frameRate || "?"} fps (odczyt źródła)`;
+      statsTimer = setInterval(() => showStats().catch(() => {}), 1000);
+      // Report changes quickly, and re-send every 3 s so a restarted PC app picks the orientation up again.
+      orientationTimer = setInterval(() => reportOrientation(++orientationTicks % 6 === 0), 500);
+      reportOrientation(true);
+    } catch (error) {
+      const message = error?.message || String(error);
+      logDiagnostic(`BŁĄD na etapie „${currentStage}”: ${message}`);
+      if (sessionUrl || pc || stream) await stop();
+      status(`Błąd · ${message}`, "#ff8888");
+      $("start").disabled = false;
+    }
+  });
+  $("stop").addEventListener("click", stop);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,1 @@
+& "C:\Users\Szymon\Documents\Codex\2026-10-02\chc\outputs\PhoneCam\src\PhoneCam.Desktop\bin\Debug\net10.0-windows\ffmpeg\win-x64\ffplay.exe" -fflags nobuffer -flags low_delay -framedrop -rtsp_transport tcp "rtsp://127.0.0.1:8554/iphone"
